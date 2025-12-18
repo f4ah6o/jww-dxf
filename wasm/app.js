@@ -95,8 +95,7 @@
         } catch (error) {
             console.error(error);
             setStatus(`変換に失敗しました: ${error.message}`, "error");
-            elements.viewer.innerHTML = "";
-            elements.viewerMessage.textContent = "プレビューを表示できませんでした。";
+            resetViewer("プレビューを表示できませんでした。");
             elements.downloadLink.classList.add("disabled");
             elements.downloadLink.setAttribute("aria-disabled", "true");
             elements.downloadLink.removeAttribute("href");
@@ -133,8 +132,7 @@
     }
 
     function renderPreview(dxfString) {
-        elements.viewer.innerHTML = "";
-        elements.viewerMessage.textContent = "プレビューを準備しています…";
+        resetViewer("プレビューを準備しています…");
 
         if (!window.DxfParser || !window.ThreeDxf || !window.THREE) {
             elements.viewerMessage.textContent =
@@ -152,7 +150,13 @@
             elements.viewerMessage.textContent = "右クリックでパン、マウスホイールでズームできます。";
         } catch (error) {
             console.error(error);
-            elements.viewerMessage.textContent = `DXF プレビューの生成に失敗しました: ${error.message}`;
+            resetViewer(`DXF プレビューの生成に失敗しました: ${error.message}`);
         }
+    }
+
+    function resetViewer(message) {
+        elements.viewer.innerHTML = "";
+        elements.viewer.appendChild(elements.viewerMessage);
+        elements.viewerMessage.textContent = message;
     }
 })();

@@ -27,6 +27,7 @@ copy-wasm-assets:
 	mkdir -p dist
 	cp wasm/example.html dist/index.html
 	cp wasm/styles.css wasm/app.js dist/
+	cp -r wasm/vendor dist/
 
 # Build WASM and copy support files
 dist: build-wasm copy-wasm-exec copy-wasm-assets

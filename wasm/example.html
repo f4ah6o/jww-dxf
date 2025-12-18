@@ -72,16 +72,16 @@
                 <a id="downloadLink" class="ghost disabled" aria-disabled="true">DXF をダウンロード</a>
             </div>
             <p class="hint">DXF 文字列をそのままコピーすることもできます。</p>
-            <textarea id="dxfOutput" readonly spellcheck="false" placeholder="DXF 出力がここに表示されます"></textarea>
+    <textarea id="dxfOutput" readonly spellcheck="false" placeholder="DXF 出力がここに表示されます"></textarea>
         </section>
     </main>
 
     <!-- Go WASM runtime -->
     <script src="wasm_exec.js"></script>
     <!-- DXF viewer dependencies -->
-    <script src="https://cdn.jsdelivr.net/npm/dxf-parser@4.9.0/dist/dxf-parser.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three-dxf@0.0.7/build/three-dxf.js"></script>
+    <script src="vendor/dxf-parser.js"></script>
+    <script src="vendor/three.min.js"></script>
+    <script src="vendor/three-dxf.js"></script>
     <!-- App logic -->
     <script src="app.js"></script>
 </body>
