@@ -5,3 +5,4 @@ build/
 
 *.skill
 .claude/
+examples/converted/

@@ -172,13 +172,13 @@ func (t *Text) EntityType() string { return "TEXT" }
 func (t *Text) GroupCodes() []GroupCode {
 	codes := []GroupCode{
 		{0, "TEXT"},
-		{8, t.Layer},
+		{8, EscapeUnicode(t.Layer)},
 		{62, t.Color},
 		{10, t.X},
 		{20, t.Y},
 		{30, 0.0},
 		{40, t.Height},
-		{1, t.Content},
+		{1, EscapeUnicode(t.Content)},
 	}
 	if t.Rotation != 0 {
 		codes = append(codes, GroupCode{50, t.Rotation})

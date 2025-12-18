@@ -4,16 +4,39 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode"
 )
 
 // Writer serializes DXF documents to an io.Writer.
 type Writer struct {
-	w io.Writer
+	w          io.Writer
+	nextHandle int
 }
 
 // NewWriter creates a new DXF writer.
 func NewWriter(w io.Writer) *Writer {
-	return &Writer{w: w}
+	return &Writer{w: w, nextHandle: 1}
+}
+
+// getHandle returns the next available handle as a hex string.
+func (w *Writer) getHandle() string {
+	h := fmt.Sprintf("%X", w.nextHandle)
+	w.nextHandle++
+	return h
+}
+
+// EscapeUnicode converts non-ASCII characters to DXF Unicode escape format (\U+XXXX).
+func EscapeUnicode(s string) string {
+	var sb strings.Builder
+	for _, r := range s {
+		if r > 127 || !unicode.IsPrint(r) {
+			// DXF uses \U+XXXX format for Unicode
+			sb.WriteString(fmt.Sprintf("\\U+%04X", r))
+		} else {
+			sb.WriteRune(r)
+		}
+	}
+	return sb.String()
 }
 
 // WriteDocument writes a complete DXF document.
@@ -101,12 +124,18 @@ func (w *Writer) writeLinetypeTable() error {
 	if err := w.writeGroupCode(2, "LTYPE"); err != nil {
 		return err
 	}
+	if err := w.writeGroupCode(5, w.getHandle()); err != nil {
+		return err
+	}
 	if err := w.writeGroupCode(70, 1); err != nil {
 		return err
 	}
 
 	// CONTINUOUS linetype
 	if err := w.writeGroupCode(0, "LTYPE"); err != nil {
+		return err
+	}
+	if err := w.writeGroupCode(5, w.getHandle()); err != nil {
 		return err
 	}
 	if err := w.writeGroupCode(2, "CONTINUOUS"); err != nil {
@@ -138,6 +167,9 @@ func (w *Writer) writeLayerTable(doc *Document) error {
 	if err := w.writeGroupCode(2, "LAYER"); err != nil {
 		return err
 	}
+	if err := w.writeGroupCode(5, w.getHandle()); err != nil {
+		return err
+	}
 	if err := w.writeGroupCode(70, len(doc.Layers)); err != nil {
 		return err
 	}
@@ -146,7 +178,10 @@ func (w *Writer) writeLayerTable(doc *Document) error {
 		if err := w.writeGroupCode(0, "LAYER"); err != nil {
 			return err
 		}
-		if err := w.writeGroupCode(2, layer.Name); err != nil {
+		if err := w.writeGroupCode(5, w.getHandle()); err != nil {
+			return err
+		}
+		if err := w.writeGroupCode(2, EscapeUnicode(layer.Name)); err != nil {
 			return err
 		}
 		flags := 0
@@ -177,12 +212,18 @@ func (w *Writer) writeStyleTable() error {
 	if err := w.writeGroupCode(2, "STYLE"); err != nil {
 		return err
 	}
+	if err := w.writeGroupCode(5, w.getHandle()); err != nil {
+		return err
+	}
 	if err := w.writeGroupCode(70, 1); err != nil {
 		return err
 	}
 
 	// STANDARD style
 	if err := w.writeGroupCode(0, "STYLE"); err != nil {
+		return err
+	}
+	if err := w.writeGroupCode(5, w.getHandle()); err != nil {
 		return err
 	}
 	if err := w.writeGroupCode(2, "STANDARD"); err != nil {
