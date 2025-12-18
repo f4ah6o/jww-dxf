@@ -6,3 +6,4 @@ build/
 *.skill
 .claude/
 examples/converted/
+examples/dwg/
