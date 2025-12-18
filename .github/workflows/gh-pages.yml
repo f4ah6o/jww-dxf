@@ -62,11 +62,11 @@ jobs:
           cp -a ../pages-dist/. .
           touch .nojekyll
           cat <<'README' > README.md
-# GitHub Pages artifacts
-
-このブランチはGitHub Pagesの公開用成果物のみを含みます。
-mainブランチの更新時に自動生成されるdistディレクトリの内容を配置しています。
-README
+          # GitHub Pages artifacts
+          
+          このブランチはGitHub Pagesの公開用成果物のみを含みます。
+          mainブランチの更新時に自動生成されるdistディレクトリの内容を配置しています。
+          README
 
       - name: Create pull request to update gh-pages
         uses: peter-evans/create-pull-request@v7
