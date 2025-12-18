@@ -330,18 +330,24 @@ func TestMapColor(t *testing.T) {
 	tests := []struct {
 		jwwColor uint16
 		expected int
+		name     string
 	}{
-		{0, 0},    // BYLAYER
-		{1, 1},    // Red
-		{2, 2},    // Yellow
-		{7, 7},    // White
-		{9, 9},    // Gray
-		{100, 10}, // Extended color
-		{150, 60}, // Extended color
+		{0, 0, "BYLAYER"},
+		{1, 4, "JWW水色->DXF cyan"},
+		{2, 7, "JWW白->DXF white"},
+		{3, 3, "JWW緑->DXF green"},
+		{4, 2, "JWW黄色->DXF yellow"},
+		{5, 6, "JWWピンク->DXF magenta"},
+		{6, 5, "JWW青->DXF blue"},
+		{7, 7, "JWW黒/白->DXF white"},
+		{8, 1, "JWW赤->DXF red"},
+		{9, 8, "JWWグレー->DXF gray"},
+		{100, 10, "Extended color"},
+		{150, 60, "Extended color"},
 	}
 
 	for _, tt := range tests {
-		t.Run("", func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			result := mapColor(tt.jwwColor)
 			if result != tt.expected {
 				t.Errorf("mapColor(%d) = %d, want %d", tt.jwwColor, result, tt.expected)
