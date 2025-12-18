@@ -65,3 +65,8 @@ make build       # ネイティブバイナリのビルド
 make build-wasm  # WebAssembly のビルド
 make test        # テストの実行
 ```
+
+## 検証
+
+* [ODA File Converter](https://www.opendesign.com/guestfiles/oda_file_Converter)
+* [ezdxf](https://github.com/mozman/ezdxf)
