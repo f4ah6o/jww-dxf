@@ -4,6 +4,9 @@
 build: clean-bin
 	go build -o bin/jww-dxf ./cmd/jww-dxf
 
+build-stats: clean-bin
+	go build -o bin/jww-stats ./cmd/jww-stats
+
 # Build WebAssembly
 build-wasm: clean-dist
 	rm -rf dist/
@@ -21,8 +24,8 @@ dist: build-wasm copy-wasm-exec
 test:
 	go test -v ./...
 
-stat:
-	go run ./cmd/jww-stats/ examples/jww
+stat: build-stats
+	./bin/jww-stats examples/jww
 
 # Convert all JWW files in examples/jww to DXF and save to examples/converted
 convert-examples: build clean-converted
