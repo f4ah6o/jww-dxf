@@ -58,6 +58,13 @@ func main() {
 
 ## 開発
 
+### JWW
+
+JWWファイルの解析結果を表示
+```bash
+go run ./cmd/jww-stats/ examples/jww
+```
+
 ### ビルド
 
 ```bash
