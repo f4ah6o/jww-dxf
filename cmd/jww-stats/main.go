@@ -3,6 +3,7 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,10 +11,14 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/f4ah6o/jww-dxf/dxf"
 	"github.com/f4ah6o/jww-dxf/jww"
 )
+
+// Command line flags
+var odaFlag = flag.Bool("oda", false, "Run ODA FileConverter check (disabled by default)")
 
 type FileStats struct {
 	Name      string
@@ -36,6 +41,11 @@ type FileStats struct {
 	EzdxfErrors int
 	EzdxfFixes  int
 	EzdxfStatus string
+	// ezdxf info results (from ezdxf info -s)
+	EzdxfInfoEntities int // Entities in modelspace
+	EzdxfInfoLayers   int // LAYER table entries
+	EzdxfInfoBlocks   int // BLOCK_RECORD table entries
+	EzdxfInfoStatus   string
 	// ODA FileConverter results
 	ODAWarnings int
 	ODAErrors   int
@@ -43,12 +53,18 @@ type FileStats struct {
 }
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, "Usage: %s <dir>\n", os.Args[0])
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s [options] <dir>\n\nOptions:\n", os.Args[0])
+		flag.PrintDefaults()
+	}
+	flag.Parse()
+
+	if flag.NArg() < 1 {
+		flag.Usage()
 		os.Exit(1)
 	}
 
-	dir := os.Args[1]
+	dir := flag.Arg(0)
 	var files []string
 
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -67,12 +83,19 @@ func main() {
 
 	sort.Strings(files)
 
-	var allStats []FileStats
+	// Process files in parallel
+	allStats := make([]FileStats, len(files))
+	var wg sync.WaitGroup
 
-	for _, file := range files {
-		stats := parseFile(file)
-		allStats = append(allStats, stats)
+	for i, file := range files {
+		wg.Add(1)
+		go func(idx int, filePath string) {
+			defer wg.Done()
+			allStats[idx] = parseFile(filePath)
+		}(i, file)
 	}
+
+	wg.Wait()
 
 	// Print markdown table
 	fmt.Println("## Test Data Matrix")
@@ -89,12 +112,12 @@ func main() {
 			filepath.Base(s.Name), s.Version, s.Lines, s.Arcs, s.Points, s.Texts, s.Solids, s.Blocks, s.BlockDefs, errStr)
 	}
 
-	// Print DXF conversion results table
+	// Print DXF conversion results table with JWW comparison
 	fmt.Println()
-	fmt.Println("## DXF Conversion Results")
+	fmt.Println("## DXF Conversion Results (Entity Count Comparison)")
 	fmt.Println()
-	fmt.Println("| File | DXF Entities | DXF Layers | DXF Blocks | Conversion Status |")
-	fmt.Println("|------|--------------|------------|------------|-------------------|")
+	fmt.Println("| File | JWW Entities | DXF Entities | Diff | Status |")
+	fmt.Println("|------|--------------|--------------|------|--------|")
 
 	for _, s := range allStats {
 		status := "✅"
@@ -103,8 +126,15 @@ func main() {
 		} else if s.Error != "" {
 			status = "⏭️ Parse failed"
 		}
-		fmt.Printf("| `%s` | %d | %d | %d | %s |\n",
-			filepath.Base(s.Name), s.DXFEntities, s.DXFLayers, s.DXFBlocks, status)
+		// Calculate JWW total entities (excluding BlockDefs which are definitions, not instances)
+		jwwTotal := s.Lines + s.Arcs + s.Points + s.Texts + s.Solids + s.Blocks
+		diff := s.DXFEntities - jwwTotal
+		diffStr := fmt.Sprintf("%+d", diff)
+		if diff == 0 {
+			diffStr = "0 ✅"
+		}
+		fmt.Printf("| `%s` | %d | %d | %s | %s |\n",
+			filepath.Base(s.Name), jwwTotal, s.DXFEntities, diffStr, status)
 	}
 
 	// Print ezdxf audit results table
@@ -119,16 +149,31 @@ func main() {
 			filepath.Base(s.Name), s.EzdxfErrors, s.EzdxfFixes, s.EzdxfStatus)
 	}
 
-	// Print ODA FileConverter results table
+	// Print ezdxf info results table (DXF file validation via ezdxf)
 	fmt.Println()
-	fmt.Println("## ODA FileConverter Results")
+	fmt.Println("## ezdxf Info Results (DXF File Statistics)")
 	fmt.Println()
-	fmt.Println("| File | Warnings | Errors | Status |")
-	fmt.Println("|------|----------|--------|--------|")
+	fmt.Println("| File | Entities | Layers | Blocks | Status |")
+	fmt.Println("|------|----------|--------|--------|--------|")
 
 	for _, s := range allStats {
-		fmt.Printf("| `%s` | %d | %d | %s |\n",
-			filepath.Base(s.Name), s.ODAWarnings, s.ODAErrors, s.ODAStatus)
+		fmt.Printf("| `%s` | %d | %d | %d | %s |\n",
+			filepath.Base(s.Name), s.EzdxfInfoEntities, s.EzdxfInfoLayers,
+			s.EzdxfInfoBlocks, s.EzdxfInfoStatus)
+	}
+
+	// Print ODA FileConverter results table (only if --oda flag is set)
+	if *odaFlag {
+		fmt.Println()
+		fmt.Println("## ODA FileConverter Results")
+		fmt.Println()
+		fmt.Println("| File | Warnings | Errors | Status |")
+		fmt.Println("|------|----------|--------|--------|")
+
+		for _, s := range allStats {
+			fmt.Printf("| `%s` | %d | %d | %s |\n",
+				filepath.Base(s.Name), s.ODAWarnings, s.ODAErrors, s.ODAStatus)
+		}
 	}
 
 	// Print unknown entities summary
@@ -170,7 +215,7 @@ func main() {
 				if s.EzdxfErrors == 0 {
 					ezdxfPassFiles++
 				}
-				if s.ODAErrors == 0 {
+				if *odaFlag && s.ODAErrors == 0 {
 					odaPassFiles++
 				}
 			}
@@ -184,11 +229,17 @@ func main() {
 	fmt.Printf("- Successfully converted to DXF: %d\n", dxfSuccessFiles)
 	fmt.Printf("- ezdxf audit passed (0 errors): %d\n", ezdxfPassFiles)
 	fmt.Printf("- ezdxf total fixes applied: %d\n", totalEzdxfFixes)
-	fmt.Printf("- ODA FileConverter passed (0 errors): %d\n", odaPassFiles)
+	if *odaFlag {
+		fmt.Printf("- ODA FileConverter passed (0 errors): %d\n", odaPassFiles)
+	}
 }
 
 func parseFile(path string) FileStats {
-	stats := FileStats{Name: path, EzdxfStatus: "⏭️ Skipped", ODAStatus: "⏭️ Skipped"}
+	odaStatus := "⏭️ Disabled"
+	if *odaFlag {
+		odaStatus = "⏭️ Skipped"
+	}
+	stats := FileStats{Name: path, EzdxfStatus: "⏭️ Skipped", EzdxfInfoStatus: "⏭️ Skipped", ODAStatus: odaStatus}
 
 	f, err := os.Open(path)
 	if err != nil {
@@ -254,11 +305,16 @@ func parseFile(path string) FileStats {
 	stats.EzdxfFixes = fixes
 	stats.EzdxfStatus = status
 
-	// Run ODA FileConverter
-	odaWarnings, odaErrors, odaStatus := runODAFileConverter(tmpPath)
-	stats.ODAWarnings = odaWarnings
-	stats.ODAErrors = odaErrors
-	stats.ODAStatus = odaStatus
+	// Run ezdxf info
+	runEzdxfInfo(tmpPath, &stats)
+
+	// Run ODA FileConverter (only if --oda flag is set)
+	if *odaFlag {
+		odaWarnings, odaErrors, odaStatus := runODAFileConverter(tmpPath)
+		stats.ODAWarnings = odaWarnings
+		stats.ODAErrors = odaErrors
+		stats.ODAStatus = odaStatus
+	}
 
 	return stats
 }
@@ -376,4 +432,48 @@ func runODAFileConverter(dxfPath string) (warnings, errors int, status string) {
 		return warnings, errors, fmt.Sprintf("⚠️ %d warnings", warnings)
 	}
 	return 0, 0, "✅"
+}
+
+// runEzdxfInfo runs ezdxf info on a DXF file and parses summary statistics.
+func runEzdxfInfo(dxfPath string, stats *FileStats) {
+	cmd := exec.Command("uvx", "--from", "git+https://github.com/mozman/ezdxf", "ezdxf", "info", "-s", dxfPath)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	output := stdout.String() + stderr.String()
+
+	if err != nil {
+		if strings.Contains(err.Error(), "executable file not found") {
+			stats.EzdxfInfoStatus = "⏭️ ezdxf not available"
+			return
+		}
+	}
+
+	// Parse summary statistics from ezdxf info -s output
+	// Example output format:
+	// Entities in modelspace: 695
+	// LAYER table entries: 258
+	// BLOCK_RECORD table entries: 2
+
+	// Parse entities in modelspace
+	entitiesRe := regexp.MustCompile(`Entities in modelspace:\s*(\d+)`)
+	if m := entitiesRe.FindStringSubmatch(output); len(m) > 1 {
+		fmt.Sscanf(m[1], "%d", &stats.EzdxfInfoEntities)
+	}
+
+	// Parse layer table entries
+	layersRe := regexp.MustCompile(`LAYER table entries:\s*(\d+)`)
+	if m := layersRe.FindStringSubmatch(output); len(m) > 1 {
+		fmt.Sscanf(m[1], "%d", &stats.EzdxfInfoLayers)
+	}
+
+	// Parse block record table entries
+	blocksRe := regexp.MustCompile(`BLOCK_RECORD table entries:\s*(\d+)`)
+	if m := blocksRe.FindStringSubmatch(output); len(m) > 1 {
+		fmt.Sscanf(m[1], "%d", &stats.EzdxfInfoBlocks)
+	}
+
+	stats.EzdxfInfoStatus = "✅"
 }
