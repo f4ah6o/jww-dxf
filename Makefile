@@ -1,4 +1,4 @@
-.PHONY: build build-wasm test stat clean convert-examples clean-bin clean-dist clean-converted copy-wasm-assets
+.PHONY: build build-wasm test stat clean convert-examples clean-bin clean-dist clean-converted copy-wasm-assets build-npm
 
 # Build native binary
 build: clean-bin
@@ -61,3 +61,10 @@ clean-dist:
 
 clean-converted:
 	rm -rf examples/converted
+
+# Build npm package
+build-npm: build-wasm copy-wasm-exec
+	mkdir -p npm/wasm
+	cp dist/jww-dxf.wasm npm/wasm/
+	cp dist/wasm_exec.js npm/wasm/
+	cd npm && npm install && npm run build:js

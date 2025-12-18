@@ -1,0 +1,54 @@
+{
+  "name": "jww-dxf",
+  "version": "0.1.0",
+  "description": "JWW (Jw_cad) file parser and DXF converter for JavaScript/TypeScript",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "wasm"
+  ],
+  "scripts": {
+    "build": "npm run build:wasm && npm run build:js",
+    "build:wasm": "cd .. && make build-wasm && cp dist/jww-dxf.wasm npm/wasm/",
+    "build:js": "tsup src/index.ts --format cjs,esm --dts",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "jww",
+    "jw-cad",
+    "jwcad",
+    "dxf",
+    "cad",
+    "converter",
+    "parser",
+    "webassembly",
+    "wasm"
+  ],
+  "author": "",
+  "license": "AGPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/f4ah6o/jww-dxf.git"
+  },
+  "bugs": {
+    "url": "https://github.com/f4ah6o/jww-dxf/issues"
+  },
+  "homepage": "https://github.com/f4ah6o/jww-dxf#readme",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
