@@ -172,6 +172,10 @@ make test        # テストの実行
 * [ODA File Converter](https://www.opendesign.com/guestfiles/oda_file_Converter)
 * [ezdxf](https://github.com/mozman/ezdxf)
 
+## ライセンス
+
+このプロジェクトは [GNU Affero General Public License v3.0](https://www.gnu.org/licenses/agpl-3.0.html) の下で提供されます。詳細は [LICENSE](./LICENSE) を参照してください。
+
 ## 既知の課題
 
 ### ODA FileConverter 互換性
