@@ -2,68 +2,87 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>JWW to DXF Converter</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JWW → DXF (WASM)</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <h1>JWW to DXF Converter</h1>
-    <input type="file" id="fileInput" accept=".jww">
-    <button id="convertBtn" disabled>DXFに変換</button>
-    <pre id="output"></pre>
+    <header class="page-header">
+        <div>
+            <p class="eyebrow">JWW to DXF / WebAssembly</p>
+            <h1>ブラウザで JWW を読み込み、DXF をプレビュー &amp; ダウンロード</h1>
+            <p class="lede">JWW ファイルをアップロードすると、WASM で変換した DXF をプレビュー表示し、内容を確認したままダウンロードできます。</p>
+        </div>
+        <a class="ghost" href="https://github.com/f4ah6o/jww-dxf" target="_blank" rel="noreferrer">GitHub</a>
+    </header>
 
-    <!-- Go WASM support script (必須) -->
+    <main class="layout">
+        <section class="card">
+            <div class="card-header">
+                <div>
+                    <p class="eyebrow">Step 1</p>
+                    <h2>JWW ファイルをアップロード</h2>
+                </div>
+                <div class="status" id="status">WASM を読み込んでいます…</div>
+            </div>
+            <div class="upload">
+                <label class="file-input">
+                    <input type="file" id="fileInput" accept=".jww">
+                    <span id="fileLabel">ファイルを選択</span>
+                </label>
+                <button id="convertBtn" disabled>DXF に変換</button>
+            </div>
+            <p class="hint">WASM がロードされると変換ボタンが有効になります。</p>
+            <dl class="meta" id="meta">
+                <div>
+                    <dt>レイヤー数</dt>
+                    <dd>—</dd>
+                </div>
+                <div>
+                    <dt>エンティティ数</dt>
+                    <dd>—</dd>
+                </div>
+                <div>
+                    <dt>ブロック数</dt>
+                    <dd>—</dd>
+                </div>
+            </dl>
+        </section>
+
+        <section class="card">
+            <div class="card-header">
+                <div>
+                    <p class="eyebrow">Step 2</p>
+                    <h2>DXF をプレビュー</h2>
+                </div>
+                <span class="badge">3D パン/ズーム対応</span>
+            </div>
+            <div id="viewer" class="viewer">
+                <div class="viewer-message" id="viewerMessage">DXF を読み込むとここに描画されます。右クリックでパン、マウスホイールでズームできます。</div>
+            </div>
+            <p class="hint">プレビューには <a href="https://github.com/gdsestimating/three-dxf" target="_blank" rel="noreferrer">three-dxf</a> と <a href="https://github.com/gdsestimating/dxf-parser" target="_blank" rel="noreferrer">dxf-parser</a> を使用しています。</p>
+        </section>
+
+        <section class="card">
+            <div class="card-header">
+                <div>
+                    <p class="eyebrow">Step 3</p>
+                    <h2>DXF 内容を確認・ダウンロード</h2>
+                </div>
+                <a id="downloadLink" class="ghost disabled" aria-disabled="true">DXF をダウンロード</a>
+            </div>
+            <p class="hint">DXF 文字列をそのままコピーすることもできます。</p>
+            <textarea id="dxfOutput" readonly spellcheck="false" placeholder="DXF 出力がここに表示されます"></textarea>
+        </section>
+    </main>
+
+    <!-- Go WASM runtime -->
     <script src="wasm_exec.js"></script>
-    <script>
-        const go = new Go();
-        
-        // WASMモジュールをロード
-        WebAssembly.instantiateStreaming(fetch("jww.wasm"), go.importObject)
-            .then((result) => {
-                go.run(result.instance);
-                console.log("WASM loaded! Available functions:", 
-                    "jwwParse, jwwToDxf, jwwToDxfString");
-                document.getElementById('convertBtn').disabled = false;
-            })
-            .catch((err) => {
-                console.error("WASM load failed:", err);
-            });
-
-        // ファイル選択処理
-        let selectedFile = null;
-        document.getElementById('fileInput').addEventListener('change', (e) => {
-            selectedFile = e.target.files[0];
-        });
-
-        // 変換処理
-        document.getElementById('convertBtn').addEventListener('click', async () => {
-            if (!selectedFile) {
-                alert('JWWファイルを選択してください');
-                return;
-            }
-
-            // ファイルをUint8Arrayとして読み込み
-            const arrayBuffer = await selectedFile.arrayBuffer();
-            const uint8Array = new Uint8Array(arrayBuffer);
-
-            // WASMの関数を呼び出し
-            const result = jwwToDxfString(uint8Array);
-            
-            if (result.ok) {
-                // 成功：DXF文字列を表示/ダウンロード
-                document.getElementById('output').textContent = result.data;
-                
-                // DXFファイルとしてダウンロード
-                const blob = new Blob([result.data], { type: 'text/plain' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = selectedFile.name.replace('.jww', '.dxf');
-                a.click();
-            } else {
-                // エラー
-                document.getElementById('output').textContent = 
-                    'Error: ' + result.error;
-            }
-        });
-    </script>
+    <!-- DXF viewer dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/dxf-parser@4.9.0/dist/dxf-parser.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three-dxf@0.0.7/build/three-dxf.js"></script>
+    <!-- App logic -->
+    <script src="app.js"></script>
 </body>
 </html>

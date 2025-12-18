@@ -1,4 +1,4 @@
-.PHONY: build build-wasm test stat clean convert-examples clean-bin clean-dist clean-converted
+.PHONY: build build-wasm test stat clean convert-examples clean-bin clean-dist clean-converted copy-wasm-assets
 
 # Build native binary
 build: clean-bin
@@ -15,10 +15,21 @@ build-wasm: clean-dist
 
 # Copy wasm_exec.js from Go installation
 copy-wasm-exec:
-	cp "$$(go env GOROOT)/misc/wasm/wasm_exec.js" dist/
+	mkdir -p dist
+	if [ -f "$$(go env GOROOT)/misc/wasm/wasm_exec.js" ]; then \
+		cp "$$(go env GOROOT)/misc/wasm/wasm_exec.js" dist/; \
+	else \
+		cp "$$(go env GOROOT)/lib/wasm/wasm_exec.js" dist/; \
+	fi
+
+# Copy static assets for the WASM demo
+copy-wasm-assets:
+	mkdir -p dist
+	cp wasm/example.html dist/index.html
+	cp wasm/styles.css wasm/app.js dist/
 
 # Build WASM and copy support files
-dist: build-wasm copy-wasm-exec
+dist: build-wasm copy-wasm-exec copy-wasm-assets
 
 # Run tests
 test:
