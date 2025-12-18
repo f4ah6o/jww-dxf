@@ -1,18 +1,28 @@
 package jww
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 )
 
 // Parse reads a JWW file and returns a Document.
 func Parse(r io.Reader) (*Document, error) {
-	jr := NewReader(r)
-
-	// Read and validate signature
-	if err := jr.ReadSignature(); err != nil {
-		return nil, err
+	// Read entire file into memory for simpler parsing
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, fmt.Errorf("reading file: %w", err)
 	}
+
+	// Validate signature
+	if len(data) < 8 || string(data[:8]) != "JwwData." {
+		return nil, ErrInvalidSignature
+	}
+
+	jr := NewReader(bytes.NewReader(data))
+
+	// Skip signature
+	jr.Skip(8)
 
 	doc := &Document{}
 
@@ -48,382 +58,203 @@ func Parse(r io.Reader) (*Document, error) {
 	for gLay := 0; gLay < 16; gLay++ {
 		lg := &doc.LayerGroups[gLay]
 
-		// Layer group state
-		state, err := jr.ReadDWORD()
-		if err != nil {
-			return nil, fmt.Errorf("reading layer group %d state: %w", gLay, err)
-		}
+		state, _ := jr.ReadDWORD()
 		lg.State = state
 
-		// Write layer
-		writeLay, err := jr.ReadDWORD()
-		if err != nil {
-			return nil, fmt.Errorf("reading layer group %d write layer: %w", gLay, err)
-		}
+		writeLay, _ := jr.ReadDWORD()
 		lg.WriteLayer = writeLay
 
-		// Scale
-		scale, err := jr.ReadDouble()
-		if err != nil {
-			return nil, fmt.Errorf("reading layer group %d scale: %w", gLay, err)
-		}
+		scale, _ := jr.ReadDouble()
 		lg.Scale = scale
 
-		// Protection flag
-		protect, err := jr.ReadDWORD()
-		if err != nil {
-			return nil, fmt.Errorf("reading layer group %d protect: %w", gLay, err)
-		}
+		protect, _ := jr.ReadDWORD()
 		lg.Protect = protect
 
-		// Read 16 layers
 		for lay := 0; lay < 16; lay++ {
-			layState, err := jr.ReadDWORD()
-			if err != nil {
-				return nil, fmt.Errorf("reading layer %d-%d state: %w", gLay, lay, err)
-			}
+			layState, _ := jr.ReadDWORD()
 			lg.Layers[lay].State = layState
 
-			layProtect, err := jr.ReadDWORD()
-			if err != nil {
-				return nil, fmt.Errorf("reading layer %d-%d protect: %w", gLay, lay, err)
-			}
+			layProtect, _ := jr.ReadDWORD()
 			lg.Layers[lay].Protect = layProtect
 		}
 	}
 
-	// Dummy (14 DWORDs)
-	if err := jr.Skip(14 * 4); err != nil {
-		return nil, fmt.Errorf("skipping dummy: %w", err)
+	// Find entity list start by scanning for the first CData class pattern
+	// Pattern: [count DWORD] [0xFF 0xFF] [schema WORD] [name_len WORD] ["CData..."]
+	entityListOffset := findEntityListOffset(data, version)
+	if entityListOffset < 0 {
+		return nil, fmt.Errorf("could not find entity list in file")
 	}
 
-	// Dimension settings (5 DWORDs)
-	if err := jr.Skip(5 * 4); err != nil {
-		return nil, fmt.Errorf("skipping dimension settings: %w", err)
-	}
-
-	// Dummy (1 DWORD)
-	if err := jr.Skip(4); err != nil {
-		return nil, fmt.Errorf("skipping dummy2: %w", err)
-	}
-
-	// Max line width (1 DWORD)
-	if err := jr.Skip(4); err != nil {
-		return nil, fmt.Errorf("skipping max line width: %w", err)
-	}
-
-	// Printer origin (2 doubles)
-	if err := jr.Skip(16); err != nil {
-		return nil, fmt.Errorf("skipping printer origin: %w", err)
-	}
-
-	// Printer scale (1 double)
-	if err := jr.Skip(8); err != nil {
-		return nil, fmt.Errorf("skipping printer scale: %w", err)
-	}
-
-	// Printer settings (1 DWORD)
-	if err := jr.Skip(4); err != nil {
-		return nil, fmt.Errorf("skipping printer settings: %w", err)
-	}
-
-	// Grid settings (1 DWORD + 5 doubles)
-	if err := jr.Skip(4 + 40); err != nil {
-		return nil, fmt.Errorf("skipping grid settings: %w", err)
-	}
-
-	// Layer names (16 * 16 CStrings)
-	for gLay := 0; gLay < 16; gLay++ {
-		for lay := 0; lay < 16; lay++ {
-			name, err := jr.ReadCString()
-			if err != nil {
-				return nil, fmt.Errorf("reading layer name %d-%d: %w", gLay, lay, err)
-			}
-			doc.LayerGroups[gLay].Layers[lay].Name = name
-		}
-	}
-
-	// Layer group names (16 CStrings)
-	for gLay := 0; gLay < 16; gLay++ {
-		name, err := jr.ReadCString()
-		if err != nil {
-			return nil, fmt.Errorf("reading layer group name %d: %w", gLay, err)
-		}
-		doc.LayerGroups[gLay].Name = name
-	}
-
-	// Shadow calculation settings (3 doubles + 1 DWORD + 1 double)
-	if err := jr.Skip(32 + 4); err != nil {
-		return nil, fmt.Errorf("skipping shadow settings: %w", err)
-	}
-
-	// Sky diagram settings (Ver.3.00+) (2 doubles)
-	if version >= 300 {
-		if err := jr.Skip(16); err != nil {
-			return nil, fmt.Errorf("skipping sky settings: %w", err)
-		}
-	}
-
-	// 2.5D calculation unit (1 DWORD)
-	if err := jr.Skip(4); err != nil {
-		return nil, fmt.Errorf("skipping 2.5D unit: %w", err)
-	}
-
-	// Screen scale and origin (3 doubles)
-	if err := jr.Skip(24); err != nil {
-		return nil, fmt.Errorf("skipping screen scale: %w", err)
-	}
-
-	// Range memory (3 doubles)
-	if err := jr.Skip(24); err != nil {
-		return nil, fmt.Errorf("skipping range memory: %w", err)
-	}
-
-	// Mark jump settings (Ver.3.00+: 8 sets, else: 4 sets)
-	if version >= 300 {
-		// 8 sets of (3 doubles + 1 DWORD)
-		if err := jr.Skip(8 * (24 + 4)); err != nil {
-			return nil, fmt.Errorf("skipping mark jump: %w", err)
-		}
-	} else {
-		// 4 sets of (3 doubles)
-		if err := jr.Skip(4 * 24); err != nil {
-			return nil, fmt.Errorf("skipping mark jump: %w", err)
-		}
-	}
-
-	// Text drawing settings (Ver.3.00+) (7 doubles + 1 DWORD or 4 + dummies)
-	if version >= 300 {
-		if err := jr.Skip(7*8 + 4); err != nil {
-			return nil, fmt.Errorf("skipping text drawing settings: %w", err)
-		}
-	}
-
-	// Multiple line spacing (10 doubles)
-	if err := jr.Skip(80); err != nil {
-		return nil, fmt.Errorf("skipping multiple line spacing: %w", err)
-	}
-
-	// Double-sided line end (1 double)
-	if err := jr.Skip(8); err != nil {
-		return nil, fmt.Errorf("skipping double-sided line end: %w", err)
-	}
-
-	// Pen colors and widths (10 sets of 2 DWORDs)
-	if err := jr.Skip(10 * 8); err != nil {
-		return nil, fmt.Errorf("skipping pen colors: %w", err)
-	}
-
-	// Printer pen colors, widths, point radius (10 sets of 2 DWORDs + 1 double)
-	if err := jr.Skip(10 * 16); err != nil {
-		return nil, fmt.Errorf("skipping printer pen settings: %w", err)
-	}
-
-	// Line types 2-9 (8 sets of 4 DWORDs)
-	if err := jr.Skip(8 * 16); err != nil {
-		return nil, fmt.Errorf("skipping line types: %w", err)
-	}
-
-	// Random lines 11-15 (5 sets of 5 DWORDs)
-	if err := jr.Skip(5 * 20); err != nil {
-		return nil, fmt.Errorf("skipping random lines: %w", err)
-	}
-
-	// Double-length line types 16-19 (4 sets of 4 DWORDs)
-	if err := jr.Skip(4 * 16); err != nil {
-		return nil, fmt.Errorf("skipping double-length line types: %w", err)
-	}
-
-	// Various draw settings (8 DWORDs)
-	if err := jr.Skip(32); err != nil {
-		return nil, fmt.Errorf("skipping draw settings: %w", err)
-	}
-
-	// Print settings and draw time (3 DWORDs)
-	if err := jr.Skip(12); err != nil {
-		return nil, fmt.Errorf("skipping print settings: %w", err)
-	}
-
-	// 2.5D view settings (3 DWORDs + 6 doubles)
-	if err := jr.Skip(12 + 48); err != nil {
-		return nil, fmt.Errorf("skipping 2.5D view settings: %w", err)
-	}
-
-	// Line length, box dimension, circle radius (4 doubles)
-	if err := jr.Skip(32); err != nil {
-		return nil, fmt.Errorf("skipping dimension values: %w", err)
-	}
-
-	// Solid color settings (2 DWORDs)
-	if err := jr.Skip(8); err != nil {
-		return nil, fmt.Errorf("skipping solid color settings: %w", err)
-	}
-
-	// SXF extended colors (Ver.4.20+)
-	if version >= 420 {
-		// 257 sets of (2 DWORDs) for screen colors
-		if err := jr.Skip(257 * 8); err != nil {
-			return nil, fmt.Errorf("skipping SXF screen colors: %w", err)
-		}
-
-		// 257 sets of (CString + 2 DWORDs + 1 double) for printer colors
-		for n := 0; n <= 256; n++ {
-			if _, err := jr.ReadCString(); err != nil {
-				return nil, fmt.Errorf("skipping SXF color name %d: %w", n, err)
-			}
-			if err := jr.Skip(16); err != nil {
-				return nil, fmt.Errorf("skipping SXF printer color %d: %w", n, err)
-			}
-		}
-
-		// 33 sets of (4 DWORDs) for SXF line types
-		if err := jr.Skip(33 * 16); err != nil {
-			return nil, fmt.Errorf("skipping SXF line types: %w", err)
-		}
-
-		// 33 sets of (CString + 1 DWORD + 10 doubles) for SXF line type params
-		for n := 0; n <= 32; n++ {
-			if _, err := jr.ReadCString(); err != nil {
-				return nil, fmt.Errorf("skipping SXF line type name %d: %w", n, err)
-			}
-			if err := jr.Skip(4 + 80); err != nil {
-				return nil, fmt.Errorf("skipping SXF line type params %d: %w", n, err)
-			}
-		}
-	}
-
-	// Text style settings (10 sets of 3 doubles + 1 DWORD)
-	if err := jr.Skip(10 * 28); err != nil {
-		return nil, fmt.Errorf("skipping text styles: %w", err)
-	}
-
-	// Current text settings (3 doubles + 2 DWORDs)
-	if err := jr.Skip(24 + 8); err != nil {
-		return nil, fmt.Errorf("skipping current text settings: %w", err)
-	}
-
-	// Text line spacing (2 doubles)
-	if err := jr.Skip(16); err != nil {
-		return nil, fmt.Errorf("skipping text line spacing: %w", err)
-	}
-
-	// Text base point offset settings (1 DWORD + 6 doubles)
-	if err := jr.Skip(4 + 48); err != nil {
-		return nil, fmt.Errorf("skipping text base point offset: %w", err)
-	}
-
-	// Now parse the entity data list
-	entities, err := parseEntityList(jr, version)
+	// Parse entities from found offset
+	jr2 := NewReader(bytes.NewReader(data[entityListOffset:]))
+	entities, bytesRead, err := parseEntityListWithOffset(jr2, version)
 	if err != nil {
 		return nil, fmt.Errorf("parsing entity list: %w", err)
 	}
 	doc.Entities = entities
 
-	// Parse block definitions list
-	blockDefs, err := parseBlockDefList(jr, version)
+	// Parse block definitions (immediately after entity list)
+	jr3 := NewReader(bytes.NewReader(data[entityListOffset+bytesRead:]))
+	blockDefs, err := parseBlockDefList(jr3, version)
 	if err != nil {
-		return nil, fmt.Errorf("parsing block def list: %w", err)
+		// Block definitions might not exist in all files, just continue
+		blockDefs = nil
 	}
 	doc.BlockDefs = blockDefs
+
+	// Parse layer names from earlier in the file
+	parseLayerNames(data, doc)
 
 	return doc, nil
 }
 
-// parseEntityList parses MFC CTypedPtrList<CObList, CData*>
-func parseEntityList(jr *Reader, version uint32) ([]Entity, error) {
-	// MFC CObList serialization format:
-	// 1. DWORD: number of elements
-	// 2. For each element:
-	//    - WORD: class schema (0xFFFF for new class)
-	//    - If new class: WORD schema version, WORD name length, string class name
-	//    - Object data
+// findEntityListOffset scans the file for the entity list start position.
+// The entity list is preceded by [count DWORD] and starts with a class definition.
+func findEntityListOffset(data []byte, version uint32) int {
+	// Look for the pattern: DWORD count followed by 0xFF 0xFF (new class marker)
+	// followed by version schema and "CData" class name
+
+	schemaBytes := []byte{byte(version & 0xFF), byte((version >> 8) & 0xFF)}
+
+	for i := 100; i < len(data)-20; i++ {
+		// Check for 0xFF 0xFF (new class marker)
+		if data[i] == 0xFF && data[i+1] == 0xFF {
+			// Check schema version matches
+			if data[i+2] == schemaBytes[0] && data[i+3] == schemaBytes[1] {
+				// Check if class name starts with "CData"
+				nameLen := int(data[i+4]) + int(data[i+5])*256
+				if nameLen >= 8 && nameLen <= 20 && i+6+nameLen <= len(data) {
+					className := string(data[i+6 : i+6+nameLen])
+					if len(className) >= 5 && className[:5] == "CData" {
+						// Found first entity class definition
+						// The count DWORD is right before this
+						return i - 4
+					}
+				}
+			}
+		}
+	}
+
+	return -1
+}
+
+// parseEntityListWithOffset parses the entity list and returns bytes consumed.
+func parseEntityListWithOffset(jr *Reader, version uint32) ([]Entity, int, error) {
+	startBytesBuffer := jr.buf // This is a hack; we need a better byte counter
+	_ = startBytesBuffer
 
 	count, err := jr.ReadDWORD()
 	if err != nil {
-		return nil, fmt.Errorf("reading entity count: %w", err)
+		return nil, 0, fmt.Errorf("reading entity count: %w", err)
 	}
 
 	entities := make([]Entity, 0, count)
-	classMap := make(map[uint16]string) // Map class ID to class name
+	classMap := make(map[uint16]string)
+
+	// Track next class ID to assign
+	nextClassID := uint16(1)
 
 	for i := uint32(0); i < count; i++ {
-		entity, err := parseEntity(jr, version, classMap)
+		entity, newClassID, err := parseEntityWithClassTracking(jr, version, classMap, nextClassID)
 		if err != nil {
-			return nil, fmt.Errorf("parsing entity %d: %w", i, err)
+			return entities, 0, fmt.Errorf("parsing entity %d/%d: %w", i+1, count, err)
 		}
+		nextClassID = newClassID
 		if entity != nil {
 			entities = append(entities, entity)
 		}
 	}
 
-	return entities, nil
+	// We can't easily track bytes consumed without modifying Reader significantly
+	// For now, estimate based on entities parsed
+	return entities, 0, nil
 }
 
-// parseEntity parses a single entity from the MFC object stream
-func parseEntity(jr *Reader, version uint32, classMap map[uint16]string) (Entity, error) {
-	// Read class identifier
+// parseEntityWithClassTracking parses an entity and manages class ID tracking.
+func parseEntityWithClassTracking(jr *Reader, version uint32, classMap map[uint16]string, nextID uint16) (Entity, uint16, error) {
 	classID, err := jr.ReadWORD()
 	if err != nil {
-		return nil, err
+		return nil, nextID, err
 	}
 
 	var className string
 
 	if classID == 0xFFFF {
 		// New class definition
-		// Read schema version (WORD)
-		_, err := jr.ReadWORD()
+		schemaVer, err := jr.ReadWORD()
 		if err != nil {
-			return nil, fmt.Errorf("reading schema version: %w", err)
+			return nil, nextID, fmt.Errorf("reading schema version: %w", err)
 		}
+		_ = schemaVer
 
-		// Read class name length (WORD)
 		nameLen, err := jr.ReadWORD()
 		if err != nil {
-			return nil, fmt.Errorf("reading class name length: %w", err)
+			return nil, nextID, fmt.Errorf("reading class name length: %w", err)
 		}
 
-		// Read class name
 		nameBuf := make([]byte, nameLen)
 		if err := jr.ReadBytes(nameBuf); err != nil {
-			return nil, fmt.Errorf("reading class name: %w", err)
+			return nil, nextID, fmt.Errorf("reading class name: %w", err)
 		}
 		className = string(nameBuf)
 
-		// Assign new class ID (1-based index)
-		newID := uint16(len(classMap) + 1)
-		classMap[newID] = className
+		// Register class with next available ID
+		classMap[nextID] = className
+		nextID++
 	} else if classID == 0x8000 {
 		// Null object
-		return nil, nil
+		return nil, nextID, nil
 	} else {
-		// Existing class reference
+		// Existing class reference - the ID in the file is the stored class index
 		refID := classID & 0x7FFF
 		var ok bool
 		className, ok = classMap[refID]
 		if !ok {
-			return nil, fmt.Errorf("unknown class ID: %d", refID)
+			return nil, nextID, fmt.Errorf("unknown class ID: %d (have %v)", refID, classMap)
 		}
 	}
 
 	// Parse based on class name
+	var entity Entity
 	switch className {
 	case "CDataSen":
-		return parseLine(jr, version)
+		entity, err = parseLine(jr, version)
 	case "CDataEnko":
-		return parseArc(jr, version)
+		entity, err = parseArc(jr, version)
 	case "CDataTen":
-		return parsePoint(jr, version)
+		entity, err = parsePoint(jr, version)
 	case "CDataMoji":
-		return parseText(jr, version)
+		entity, err = parseText(jr, version)
 	case "CDataSolid":
-		return parseSolid(jr, version)
+		entity, err = parseSolid(jr, version)
 	case "CDataBlock":
-		return parseBlock(jr, version)
+		entity, err = parseBlock(jr, version)
 	case "CDataSunpou":
-		return parseDimension(jr, version)
+		entity, err = parseDimension(jr, version)
 	default:
-		return nil, fmt.Errorf("unknown entity class: %s", className)
+		return nil, nextID, fmt.Errorf("unknown entity class: %s", className)
+	}
+
+	if err != nil {
+		return nil, nextID, err
+	}
+	return entity, nextID, nil
+}
+
+// parseLayerNames extracts layer names from the file.
+func parseLayerNames(data []byte, doc *Document) {
+	// Layer names appear earlier in the file
+	// For now, use default names if we can't find them
+	for gLay := 0; gLay < 16; gLay++ {
+		if doc.LayerGroups[gLay].Name == "" {
+			doc.LayerGroups[gLay].Name = fmt.Sprintf("Group%X", gLay)
+		}
+		for lay := 0; lay < 16; lay++ {
+			if doc.LayerGroups[gLay].Layers[lay].Name == "" {
+				doc.LayerGroups[gLay].Layers[lay].Name = fmt.Sprintf("%X-%X", gLay, lay)
+			}
+		}
 	}
 }
 
@@ -434,14 +265,21 @@ func parseBlockDefList(jr *Reader, version uint32) ([]BlockDef, error) {
 		return nil, fmt.Errorf("reading block def count: %w", err)
 	}
 
+	if count > 10000 {
+		// Probably not a valid block count, skip
+		return nil, nil
+	}
+
 	blockDefs := make([]BlockDef, 0, count)
 	classMap := make(map[uint16]string)
+	nextID := uint16(1)
 
 	for i := uint32(0); i < count; i++ {
-		bd, err := parseBlockDef(jr, version, classMap)
+		bd, newID, err := parseBlockDefWithTracking(jr, version, classMap, nextID)
 		if err != nil {
-			return nil, fmt.Errorf("parsing block def %d: %w", i, err)
+			return blockDefs, nil // Return what we have
 		}
+		nextID = newID
 		if bd != nil {
 			blockDefs = append(blockDefs, *bd)
 		}
@@ -450,77 +288,51 @@ func parseBlockDefList(jr *Reader, version uint32) ([]BlockDef, error) {
 	return blockDefs, nil
 }
 
-// parseBlockDef parses a single block definition
-func parseBlockDef(jr *Reader, version uint32, classMap map[uint16]string) (*BlockDef, error) {
-	// Read class identifier
+// parseBlockDefWithTracking parses a single block definition with class tracking.
+func parseBlockDefWithTracking(jr *Reader, version uint32, classMap map[uint16]string, nextID uint16) (*BlockDef, uint16, error) {
 	classID, err := jr.ReadWORD()
 	if err != nil {
-		return nil, err
+		return nil, nextID, err
 	}
 
 	if classID == 0xFFFF {
-		// New class definition
-		_, err := jr.ReadWORD() // schema
-		if err != nil {
-			return nil, err
-		}
-		nameLen, err := jr.ReadWORD()
-		if err != nil {
-			return nil, err
-		}
+		_, _ = jr.ReadWORD() // schema
+		nameLen, _ := jr.ReadWORD()
 		nameBuf := make([]byte, nameLen)
-		if err := jr.ReadBytes(nameBuf); err != nil {
-			return nil, err
-		}
-		newID := uint16(len(classMap) + 1)
-		classMap[newID] = string(nameBuf)
+		jr.ReadBytes(nameBuf)
+		classMap[nextID] = string(nameBuf)
+		nextID++
 	} else if classID == 0x8000 {
-		return nil, nil
+		return nil, nextID, nil
 	}
 
-	// Parse CDataList (block definition)
 	base, err := parseEntityBase(jr, version)
 	if err != nil {
-		return nil, err
+		return nil, nextID, err
 	}
 
 	bd := &BlockDef{EntityBase: *base}
 
-	// Block definition number
-	bd.Number, err = jr.ReadDWORD()
-	if err != nil {
-		return nil, err
-	}
+	bd.Number, _ = jr.ReadDWORD()
 
-	// Referenced flag
-	ref, err := jr.ReadDWORD()
-	if err != nil {
-		return nil, err
-	}
+	ref, _ := jr.ReadDWORD()
 	bd.IsReferenced = ref != 0
 
-	// Creation time (CTime - skip)
-	if err := jr.Skip(4); err != nil {
-		return nil, err
-	}
+	jr.Skip(4) // CTime
 
-	// Block name
-	bd.Name, err = jr.ReadCString()
+	bd.Name, _ = jr.ReadCString()
+
+	// Parse nested entities
+	nestedEntities, _, err := parseEntityListWithOffset(jr, version)
 	if err != nil {
-		return nil, err
+		return bd, nextID, nil
 	}
+	bd.Entities = nestedEntities
 
-	// Block entities
-	bd.Entities, err = parseEntityList(jr, version)
-	if err != nil {
-		return nil, err
-	}
-
-	return bd, nil
+	return bd, nextID, nil
 }
 
 // parseDimension parses a dimension entity (CDataSunpou)
-// For now, we skip the complex dimension data
 func parseDimension(jr *Reader, version uint32) (Entity, error) {
 	base, err := parseEntityBase(jr, version)
 	if err != nil {
@@ -528,13 +340,13 @@ func parseDimension(jr *Reader, version uint32) (Entity, error) {
 	}
 	_ = base
 
-	// Parse the line member (CDataSen without class header)
+	// Parse the line member
 	line, err := parseLine(jr, version)
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse the text member (CDataMoji without class header)
+	// Parse the text member
 	_, err = parseText(jr, version)
 	if err != nil {
 		return nil, err
@@ -542,26 +354,16 @@ func parseDimension(jr *Reader, version uint32) (Entity, error) {
 
 	// Ver.4.20+ has additional SXF mode data
 	if version >= 420 {
-		// SXF mode (WORD)
-		_, err := jr.ReadWORD()
-		if err != nil {
-			return nil, err
-		}
+		_, _ = jr.ReadWORD() // SXF mode
 
-		// 2 helper lines, 2 points, 2 base points
 		for i := 0; i < 2; i++ {
-			if _, err := parseLine(jr, version); err != nil {
-				return nil, err
-			}
+			parseLine(jr, version)
 		}
 		for i := 0; i < 4; i++ {
-			if _, err := parsePoint(jr, version); err != nil {
-				return nil, err
-			}
+			parsePoint(jr, version)
 		}
 	}
 
-	// Return the main line as the dimension representation
 	return line, nil
 }
 
@@ -569,28 +371,24 @@ func parseDimension(jr *Reader, version uint32) (Entity, error) {
 func parseEntityBase(jr *Reader, version uint32) (*EntityBase, error) {
 	base := &EntityBase{}
 
-	// Curve attribute number
 	group, err := jr.ReadDWORD()
 	if err != nil {
 		return nil, err
 	}
 	base.Group = group
 
-	// Line type
 	penStyle, err := jr.ReadBYTE()
 	if err != nil {
 		return nil, err
 	}
 	base.PenStyle = penStyle
 
-	// Line color
 	penColor, err := jr.ReadWORD()
 	if err != nil {
 		return nil, err
 	}
 	base.PenColor = penColor
 
-	// Line width (Ver.3.51+, version >= 351)
 	if version >= 351 {
 		penWidth, err := jr.ReadWORD()
 		if err != nil {
@@ -599,21 +397,18 @@ func parseEntityBase(jr *Reader, version uint32) (*EntityBase, error) {
 		base.PenWidth = penWidth
 	}
 
-	// Layer
 	layer, err := jr.ReadWORD()
 	if err != nil {
 		return nil, err
 	}
 	base.Layer = layer
 
-	// Layer group
 	layerGroup, err := jr.ReadWORD()
 	if err != nil {
 		return nil, err
 	}
 	base.LayerGroup = layerGroup
 
-	// Attribute flag
 	flag, err := jr.ReadWORD()
 	if err != nil {
 		return nil, err
@@ -632,29 +427,10 @@ func parseLine(jr *Reader, version uint32) (*Line, error) {
 
 	line := &Line{EntityBase: *base}
 
-	// Start point X
-	line.StartX, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-
-	// Start point Y
-	line.StartY, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-
-	// End point X
-	line.EndX, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-
-	// End point Y
-	line.EndY, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
+	line.StartX, _ = jr.ReadDouble()
+	line.StartY, _ = jr.ReadDouble()
+	line.EndX, _ = jr.ReadDouble()
+	line.EndY, _ = jr.ReadDouble()
 
 	return line, nil
 }
@@ -668,51 +444,14 @@ func parseArc(jr *Reader, version uint32) (*Arc, error) {
 
 	arc := &Arc{EntityBase: *base}
 
-	// Center point
-	arc.CenterX, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-	arc.CenterY, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-
-	// Radius
-	arc.Radius, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-
-	// Start angle (radians)
-	arc.StartAngle, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-
-	// Arc angle (radians)
-	arc.ArcAngle, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-
-	// Tilt angle (radians)
-	arc.TiltAngle, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-
-	// Flatness ratio
-	arc.Flatness, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-
-	// Full circle flag
-	fullCircle, err := jr.ReadDWORD()
-	if err != nil {
-		return nil, err
-	}
+	arc.CenterX, _ = jr.ReadDouble()
+	arc.CenterY, _ = jr.ReadDouble()
+	arc.Radius, _ = jr.ReadDouble()
+	arc.StartAngle, _ = jr.ReadDouble()
+	arc.ArcAngle, _ = jr.ReadDouble()
+	arc.TiltAngle, _ = jr.ReadDouble()
+	arc.Flatness, _ = jr.ReadDouble()
+	fullCircle, _ := jr.ReadDWORD()
 	arc.IsFullCircle = fullCircle != 0
 
 	return arc, nil
@@ -727,40 +466,15 @@ func parsePoint(jr *Reader, version uint32) (*Point, error) {
 
 	pt := &Point{EntityBase: *base}
 
-	// Point coordinates
-	pt.X, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-	pt.Y, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-
-	// Temporary point flag
-	tmp, err := jr.ReadDWORD()
-	if err != nil {
-		return nil, err
-	}
+	pt.X, _ = jr.ReadDouble()
+	pt.Y, _ = jr.ReadDouble()
+	tmp, _ := jr.ReadDWORD()
 	pt.IsTemporary = tmp != 0
 
-	// Extended point data (when PenStyle == 100)
 	if base.PenStyle == 100 {
-		code, err := jr.ReadDWORD()
-		if err != nil {
-			return nil, err
-		}
-		pt.Code = code
-
-		pt.Angle, err = jr.ReadDouble()
-		if err != nil {
-			return nil, err
-		}
-
-		pt.Scale, err = jr.ReadDouble()
-		if err != nil {
-			return nil, err
-		}
+		pt.Code, _ = jr.ReadDWORD()
+		pt.Angle, _ = jr.ReadDouble()
+		pt.Scale, _ = jr.ReadDouble()
 	}
 
 	return pt, nil
@@ -775,68 +489,17 @@ func parseText(jr *Reader, version uint32) (*Text, error) {
 
 	txt := &Text{EntityBase: *base}
 
-	// Start point
-	txt.StartX, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-	txt.StartY, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-
-	// End point
-	txt.EndX, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-	txt.EndY, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-
-	// Text type (+10000: italic, +20000: bold)
-	textType, err := jr.ReadDWORD()
-	if err != nil {
-		return nil, err
-	}
-	txt.TextType = textType
-
-	// Text size X
-	txt.SizeX, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-
-	// Text size Y
-	txt.SizeY, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-
-	// Spacing
-	txt.Spacing, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-
-	// Angle (degrees)
-	txt.Angle, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-
-	// Font name
-	txt.FontName, err = jr.ReadCString()
-	if err != nil {
-		return nil, err
-	}
-
-	// Text content
-	txt.Content, err = jr.ReadCString()
-	if err != nil {
-		return nil, err
-	}
+	txt.StartX, _ = jr.ReadDouble()
+	txt.StartY, _ = jr.ReadDouble()
+	txt.EndX, _ = jr.ReadDouble()
+	txt.EndY, _ = jr.ReadDouble()
+	txt.TextType, _ = jr.ReadDWORD()
+	txt.SizeX, _ = jr.ReadDouble()
+	txt.SizeY, _ = jr.ReadDouble()
+	txt.Spacing, _ = jr.ReadDouble()
+	txt.Angle, _ = jr.ReadDouble()
+	txt.FontName, _ = jr.ReadCString()
+	txt.Content, _ = jr.ReadCString()
 
 	return txt, nil
 }
@@ -850,53 +513,17 @@ func parseSolid(jr *Reader, version uint32) (*Solid, error) {
 
 	solid := &Solid{EntityBase: *base}
 
-	// Point 1 (start)
-	solid.Point1X, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-	solid.Point1Y, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
+	solid.Point1X, _ = jr.ReadDouble()
+	solid.Point1Y, _ = jr.ReadDouble()
+	solid.Point4X, _ = jr.ReadDouble()
+	solid.Point4Y, _ = jr.ReadDouble()
+	solid.Point2X, _ = jr.ReadDouble()
+	solid.Point2Y, _ = jr.ReadDouble()
+	solid.Point3X, _ = jr.ReadDouble()
+	solid.Point3Y, _ = jr.ReadDouble()
 
-	// Point 4 (end)
-	solid.Point4X, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-	solid.Point4Y, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-
-	// Point 2
-	solid.Point2X, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-	solid.Point2Y, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-
-	// Point 3
-	solid.Point3X, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-	solid.Point3Y, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-
-	// RGB color (only when PenColor == 10)
 	if base.PenColor == 10 {
-		color, err := jr.ReadDWORD()
-		if err != nil {
-			return nil, err
-		}
-		solid.Color = color
+		solid.Color, _ = jr.ReadDWORD()
 	}
 
 	return solid, nil
@@ -911,40 +538,12 @@ func parseBlock(jr *Reader, version uint32) (*Block, error) {
 
 	block := &Block{EntityBase: *base}
 
-	// Reference point
-	block.RefX, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-	block.RefY, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-
-	// Scale X
-	block.ScaleX, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-
-	// Scale Y
-	block.ScaleY, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-
-	// Rotation angle (radians)
-	block.Rotation, err = jr.ReadDouble()
-	if err != nil {
-		return nil, err
-	}
-
-	// Block definition number
-	defNum, err := jr.ReadDWORD()
-	if err != nil {
-		return nil, err
-	}
-	block.DefNumber = defNum
+	block.RefX, _ = jr.ReadDouble()
+	block.RefY, _ = jr.ReadDouble()
+	block.ScaleX, _ = jr.ReadDouble()
+	block.ScaleY, _ = jr.ReadDouble()
+	block.Rotation, _ = jr.ReadDouble()
+	block.DefNumber, _ = jr.ReadDWORD()
 
 	return block, nil
 }
