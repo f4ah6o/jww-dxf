@@ -91,7 +91,7 @@ func (w *Writer) WriteDocument(doc *Document) error {
 }
 
 func (w *Writer) writeHeader() error {
-	// Minimal header for AutoCAD compatibility
+	// Header section with essential variables for ODA compatibility
 	if err := w.writeSection("HEADER"); err != nil {
 		return err
 	}
@@ -104,11 +104,51 @@ func (w *Writer) writeHeader() error {
 		return err
 	}
 
+	// Code page
+	if err := w.writeGroupCode(9, "$DWGCODEPAGE"); err != nil {
+		return err
+	}
+	if err := w.writeGroupCode(3, "ANSI_1252"); err != nil {
+		return err
+	}
+
 	// Measurement units (metric)
 	if err := w.writeGroupCode(9, "$MEASUREMENT"); err != nil {
 		return err
 	}
 	if err := w.writeGroupCode(70, 1); err != nil {
+		return err
+	}
+
+	// Text style
+	if err := w.writeGroupCode(9, "$TEXTSTYLE"); err != nil {
+		return err
+	}
+	if err := w.writeGroupCode(7, "Standard"); err != nil {
+		return err
+	}
+
+	// Current layer
+	if err := w.writeGroupCode(9, "$CLAYER"); err != nil {
+		return err
+	}
+	if err := w.writeGroupCode(8, "0"); err != nil {
+		return err
+	}
+
+	// Current linetype
+	if err := w.writeGroupCode(9, "$CELTYPE"); err != nil {
+		return err
+	}
+	if err := w.writeGroupCode(6, "BYLAYER"); err != nil {
+		return err
+	}
+
+	// Current color
+	if err := w.writeGroupCode(9, "$CECOLOR"); err != nil {
+		return err
+	}
+	if err := w.writeGroupCode(62, 256); err != nil { // BYLAYER
 		return err
 	}
 

@@ -48,6 +48,11 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  Blocks: %d\n", len(doc.BlockDefs))
 	}
 
+	// Auto-enable DXF output if -o flag is specified
+	if *outputFile != "" {
+		*outputDxf = true
+	}
+
 	if *outputDxf {
 		// Convert to DXF
 		dxfDoc := dxf.ConvertDocument(doc)
