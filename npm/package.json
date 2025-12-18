@@ -18,7 +18,7 @@
   ],
   "scripts": {
     "build": "npm run build:wasm && npm run build:js",
-    "build:wasm": "pwd && cd .. && make build-wasm && cp dist/jww-dxf.wasm npm/wasm/",
+    "build:wasm": "mkdir -p wasm && cd .. && make build-wasm && cp dist/jww-dxf.wasm npm/wasm/",
     "build:js": "tsup src/index.ts --format cjs,esm --dts",
     "prepublishOnly": "npm run build"
   },
