@@ -24,6 +24,7 @@ jobs:
   npm-publish:
     needs: release
     uses: ./.github/workflows/npm-publish.yaml
+    secrets: inherit
     permissions:
       id-token: write
       contents: read
