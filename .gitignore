@@ -5,7 +5,8 @@ build/
 /jww-stats
 
 *.skill
-.claude/
+.claude/*
+!.claude/hooks/
 examples/converted/
 examples/dwg/
 examples/dxf_librecad/

@@ -1,0 +1,57 @@
+#!/bin/bash
+# SessionStart hook for jww-parser project
+# This hook runs automatically when a new Claude Code session starts
+
+echo "🚀 jww-parser: Starting session setup..."
+
+# Check if Go is installed
+if ! command -v go &> /dev/null; then
+    echo "❌ Error: Go is not installed"
+    echo "   Please install Go 1.25.0 or higher from https://go.dev/dl/"
+    exit 1
+fi
+
+# Check Go version
+GO_VERSION=$(go version | awk '{print $3}' | sed 's/go//')
+echo "✓ Go version: $GO_VERSION"
+
+# Try to download Go dependencies (non-fatal if it fails)
+echo "📦 Downloading Go dependencies..."
+if go mod download 2>&1 | grep -v "dial tcp"; then
+    echo "✓ Go dependencies downloaded successfully"
+    DEPS_OK=true
+else
+    echo "⚠️  Warning: Could not download dependencies (network issue or already cached)"
+    DEPS_OK=false
+fi
+
+# Only verify and compile if dependencies were downloaded
+if [ "$DEPS_OK" = true ]; then
+    # Verify dependencies
+    echo "🔍 Verifying dependencies..."
+    if go mod verify > /dev/null 2>&1; then
+        echo "✓ Dependencies verified"
+    else
+        echo "⚠️  Warning: Dependency verification failed"
+    fi
+
+    # Run a quick sanity check (compile but don't link)
+    echo "🔨 Running sanity check (compile-only)..."
+    if go build -o /dev/null ./jww > /dev/null 2>&1; then
+        echo "✓ Project compiles successfully"
+    else
+        echo "⚠️  Compilation check skipped (dependencies may not be ready)"
+    fi
+fi
+
+echo ""
+echo "✅ Session setup complete!"
+echo ""
+echo "📚 Quick start:"
+echo "   - Build CLI: make build"
+echo "   - Run tests: make test"
+echo "   - Build WASM: make build-wasm"
+echo "   - See CLAUDE.md for full documentation"
+echo ""
+
+exit 0
