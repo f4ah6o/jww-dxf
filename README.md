@@ -2,6 +2,8 @@
 
 Jw_cad (JWW) ファイルを解析し、DXF 形式への変換や情報抽出を行うための Go 言語ライブラリおよびツールです。
 
+- 📚 パッケージリファレンス: https://pkg.go.dev/github.com/f4ah6o/jww-parser
+
 ## 特徴
 
 - **JWW パーサー**: JWW ファイルのバイナリ構造を解析し、Go の構造体に変換します。
