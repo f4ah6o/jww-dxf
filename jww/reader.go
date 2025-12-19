@@ -47,16 +47,18 @@ var (
 // All multi-byte values are read in little-endian format, and text strings are
 // decoded from Shift-JIS to UTF-8.
 type Reader struct {
-	r   io.Reader
-	buf []byte
+	r         io.Reader
+	buf       []byte
+	bytesRead int64
 }
 
 // NewReader creates a new JWW binary reader that wraps the provided io.Reader.
 // The reader maintains an internal buffer for efficient binary data reading.
 func NewReader(r io.Reader) *Reader {
 	return &Reader{
-		r:   r,
-		buf: make([]byte, 8),
+		r:         r,
+		buf:       make([]byte, 8),
+		bytesRead: 0,
 	}
 }
 
@@ -65,7 +67,9 @@ func NewReader(r io.Reader) *Reader {
 // Returns ErrInvalidSignature if the signature is invalid.
 func (r *Reader) ReadSignature() error {
 	sig := make([]byte, 8)
-	if _, err := io.ReadFull(r.r, sig); err != nil {
+	n, err := io.ReadFull(r.r, sig)
+	r.bytesRead += int64(n)
+	if err != nil {
 		return err
 	}
 	if string(sig) != "JwwData." {
@@ -77,7 +81,9 @@ func (r *Reader) ReadSignature() error {
 // ReadDWORD reads a 32-bit unsigned integer in little-endian format.
 // This corresponds to the Windows DWORD type used in the JWW file format.
 func (r *Reader) ReadDWORD() (uint32, error) {
-	if _, err := io.ReadFull(r.r, r.buf[:4]); err != nil {
+	n, err := io.ReadFull(r.r, r.buf[:4])
+	r.bytesRead += int64(n)
+	if err != nil {
 		return 0, err
 	}
 	return binary.LittleEndian.Uint32(r.buf[:4]), nil
@@ -86,7 +92,9 @@ func (r *Reader) ReadDWORD() (uint32, error) {
 // ReadWORD reads a 16-bit unsigned integer in little-endian format.
 // This corresponds to the Windows WORD type used in the JWW file format.
 func (r *Reader) ReadWORD() (uint16, error) {
-	if _, err := io.ReadFull(r.r, r.buf[:2]); err != nil {
+	n, err := io.ReadFull(r.r, r.buf[:2])
+	r.bytesRead += int64(n)
+	if err != nil {
 		return 0, err
 	}
 	return binary.LittleEndian.Uint16(r.buf[:2]), nil
@@ -95,7 +103,9 @@ func (r *Reader) ReadWORD() (uint16, error) {
 // ReadBYTE reads a single unsigned byte.
 // This corresponds to the Windows BYTE type used in the JWW file format.
 func (r *Reader) ReadBYTE() (byte, error) {
-	if _, err := io.ReadFull(r.r, r.buf[:1]); err != nil {
+	n, err := io.ReadFull(r.r, r.buf[:1])
+	r.bytesRead += int64(n)
+	if err != nil {
 		return 0, err
 	}
 	return r.buf[0], nil
@@ -104,7 +114,9 @@ func (r *Reader) ReadBYTE() (byte, error) {
 // ReadDouble reads a 64-bit IEEE 754 floating point number in little-endian format.
 // This is used for coordinate values and other measurements in JWW files.
 func (r *Reader) ReadDouble() (float64, error) {
-	if _, err := io.ReadFull(r.r, r.buf[:8]); err != nil {
+	n, err := io.ReadFull(r.r, r.buf[:8])
+	r.bytesRead += int64(n)
+	if err != nil {
 		return 0, err
 	}
 	bits := binary.LittleEndian.Uint64(r.buf[:8])
@@ -152,7 +164,9 @@ func (r *Reader) ReadCString() (string, error) {
 
 	// Read string bytes
 	strBuf := make([]byte, length)
-	if _, err := io.ReadFull(r.r, strBuf); err != nil {
+	n, err := io.ReadFull(r.r, strBuf)
+	r.bytesRead += int64(n)
+	if err != nil {
 		return "", err
 	}
 
@@ -163,7 +177,8 @@ func (r *Reader) ReadCString() (string, error) {
 // ReadBytes reads exactly len(buf) bytes into the provided buffer.
 // Returns an error if fewer bytes are available.
 func (r *Reader) ReadBytes(buf []byte) error {
-	_, err := io.ReadFull(r.r, buf)
+	n, err := io.ReadFull(r.r, buf)
+	r.bytesRead += int64(n)
 	return err
 }
 
@@ -171,8 +186,15 @@ func (r *Reader) ReadBytes(buf []byte) error {
 // This is useful for skipping over unknown or unneeded data structures.
 func (r *Reader) Skip(n int) error {
 	buf := make([]byte, n)
-	_, err := io.ReadFull(r.r, buf)
+	read, err := io.ReadFull(r.r, buf)
+	r.bytesRead += int64(read)
 	return err
+}
+
+// BytesRead returns the total number of bytes read from the underlying reader.
+// This is useful for tracking offsets while parsing nested structures.
+func (r *Reader) BytesRead() int64 {
+	return r.bytesRead
 }
 
 // float64FromBits converts a uint64 bit pattern to a float64 value.

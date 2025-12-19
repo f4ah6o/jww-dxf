@@ -2,6 +2,7 @@ package jww
 
 import (
 	"bytes"
+	"encoding/binary"
 	"os"
 	"path/filepath"
 	"testing"
@@ -351,6 +352,27 @@ func TestParseBlock(t *testing.T) {
 	}
 }
 
+func TestParse_BlockDefinitionsAreParsedAfterEntities(t *testing.T) {
+	data := createMinimalJWWDataWithBlockDef()
+
+	doc, err := Parse(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	if len(doc.BlockDefs) != 1 {
+		t.Fatalf("expected 1 block definition, got %d", len(doc.BlockDefs))
+	}
+
+	def := doc.BlockDefs[0]
+	if def.Number != 1 {
+		t.Errorf("block def number: got %d, want 1", def.Number)
+	}
+	if def.Name != "BLK" {
+		t.Errorf("block def name: got %q, want %q", def.Name, "BLK")
+	}
+}
+
 // createMinimalJWWData creates minimal valid JWW file data for testing
 func createMinimalJWWData() []byte {
 	data := make([]byte, 0, 15000)
@@ -416,4 +438,44 @@ func createMinimalJWWData() []byte {
 	}
 
 	return data
+}
+
+func createMinimalJWWDataWithBlockDef() []byte {
+	data := createMinimalJWWData()
+
+	var buf bytes.Buffer
+
+	// Block definition count
+	_ = binary.Write(&buf, binary.LittleEndian, uint32(1))
+
+	// Class definition header for block definition (CDataList)
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(0xFFFF))
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(600)) // schema version
+	nameBytes := []byte("CDataList")
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(len(nameBytes)))
+	buf.Write(nameBytes)
+
+	// EntityBase
+	_ = binary.Write(&buf, binary.LittleEndian, uint32(0)) // group
+	buf.WriteByte(1)                                       // penStyle
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(1)) // penColor
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(1)) // penWidth
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(0)) // layer
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(0)) // layerGroup
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(0)) // flag
+
+	// Block definition fields
+	_ = binary.Write(&buf, binary.LittleEndian, uint32(1)) // Number
+	_ = binary.Write(&buf, binary.LittleEndian, uint32(0)) // IsReferenced
+	_ = binary.Write(&buf, binary.LittleEndian, uint32(0)) // CTime
+
+	// Name CString: "BLK"
+	blockName := []byte("BLK")
+	buf.WriteByte(byte(len(blockName)))
+	buf.Write(blockName)
+
+	// Nested entity list (count = 0)
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(0))
+
+	return append(data, buf.Bytes()...)
 }

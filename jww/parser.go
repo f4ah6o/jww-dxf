@@ -170,8 +170,7 @@ func findEntityListOffset(data []byte, version uint32) int {
 
 // parseEntityListWithOffset parses the entity list and returns bytes consumed.
 func parseEntityListWithOffset(jr *Reader, version uint32) ([]Entity, int, error) {
-	startBytesBuffer := jr.buf // This is a hack; we need a better byte counter
-	_ = startBytesBuffer
+	startBytes := jr.BytesRead()
 
 	countWord, err := jr.ReadWORD()
 	if err != nil {
@@ -200,9 +199,8 @@ func parseEntityListWithOffset(jr *Reader, version uint32) ([]Entity, int, error
 		}
 	}
 
-	// We can't easily track bytes consumed without modifying Reader significantly
-	// For now, estimate based on entities parsed
-	return entities, 0, nil
+	bytesConsumed := jr.BytesRead() - startBytes
+	return entities, int(bytesConsumed), nil
 }
 
 // parseEntityWithPIDTracking parses an entity using MFC CArchive PID tracking.
