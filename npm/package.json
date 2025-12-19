@@ -1,6 +1,6 @@
 {
   "name": "jww-parser",
-  "version": "2025.12.0",
+  "version": "1.0.0",
   "description": "JWW (Jw_cad) file parser and DXF converter for JavaScript/TypeScript",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
