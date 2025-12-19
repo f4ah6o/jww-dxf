@@ -18,7 +18,7 @@
   ],
   "scripts": {
     "build": "npm run build:wasm && npm run build:js",
-    "build:wasm": "mkdir -p wasm && cd .. && make build-wasm && cp dist/jww-parser.wasm npm/wasm/",
+    "build:wasm": "mkdir -p wasm && cd .. && make build-wasm copy-wasm-exec && cp dist/jww-parser.wasm dist/wasm_exec.js npm/wasm/",
     "build:js": "tsup src/index.ts --format cjs,esm --dts",
     "prepublishOnly": "npm run build"
   },
