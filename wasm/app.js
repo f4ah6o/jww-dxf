@@ -9,7 +9,11 @@
         downloadLink: document.getElementById("downloadLink"),
         viewer: document.getElementById("viewer"),
         viewerMessage: document.getElementById("viewerMessage"),
+        commitHash: document.getElementById("commitHash"),
+        jwwVersion: document.getElementById("jwwVersion"),
     };
+
+    const BUILD_COMMIT = "__COMMIT_HASH__";
 
     let selectedFile = null;
     let wasmReady = false;
@@ -17,6 +21,8 @@
 
     const go = new Go();
     const wasmReadyPromise = loadWasm();
+
+    setCommitHash();
 
     elements.fileInput.addEventListener("change", (event) => {
         selectedFile = event.target.files?.[0] || null;
@@ -50,6 +56,7 @@
             go.run(result.instance);
             wasmReady = true;
             setStatus("WASM がロードされました。JWW ファイルを選択してください。", "success");
+            updateVersion();
             updateConvertButton();
         } catch (error) {
             console.error(error);
@@ -158,5 +165,26 @@
         elements.viewer.innerHTML = "";
         elements.viewer.appendChild(elements.viewerMessage);
         elements.viewerMessage.textContent = message;
+    }
+
+    function setCommitHash() {
+        if (!elements.commitHash) return;
+
+        const value = typeof BUILD_COMMIT === "string" && !BUILD_COMMIT.includes("__COMMIT_HASH__")
+            ? BUILD_COMMIT
+            : "unknown";
+        elements.commitHash.textContent = value;
+    }
+
+    function updateVersion() {
+        if (!elements.jwwVersion || typeof jwwGetVersion !== "function") return;
+
+        try {
+            const version = jwwGetVersion();
+            elements.jwwVersion.textContent = version || "unknown";
+        } catch (error) {
+            console.error(error);
+            elements.jwwVersion.textContent = "unknown";
+        }
     }
 })();
