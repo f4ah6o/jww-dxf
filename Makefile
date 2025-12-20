@@ -1,5 +1,7 @@
 .PHONY: build build-wasm test stat clean convert-examples clean-bin clean-dist clean-converted copy-wasm-assets build-npm
 
+COMMIT_HASH := $(shell git rev-parse HEAD)
+
 # Build native binary
 build: clean-bin
 	go build -o bin/jww-parser ./cmd/jww-parser
@@ -26,7 +28,8 @@ copy-wasm-exec:
 copy-wasm-assets:
 	mkdir -p dist
 	cp wasm/example.html dist/index.html
-	cp wasm/styles.css wasm/app.js dist/
+	cp wasm/styles.css dist/
+	sed 's/__COMMIT_HASH__/$(COMMIT_HASH)/g' wasm/app.js > dist/app.js
 	cp -r wasm/vendor dist/
 
 # Build WASM and copy support files
