@@ -1,5 +1,7 @@
 import DxfParser from "@f12o/dxf-parser";
 import { Viewer } from "@f12o/three-dxf";
+import { FontLoader, type Font } from "three/examples/jsm/loaders/FontLoader.js";
+import { TTFLoader } from "three/examples/jsm/loaders/TTFLoader.js";
 import "../styles.css";
 
 declare const Go: new () => GoRuntime;
@@ -53,6 +55,7 @@ const elements = {
 let selectedFile: File | null = null;
 let wasmReady = false;
 let downloadUrl: string | null = null;
+const fontPromise = loadFont();
 
 const go = new Go();
 const wasmReadyPromise = loadWasm();
@@ -82,6 +85,16 @@ function setStatus(message: string, type: StatusType = "info"): void {
 
 function updateConvertButton(): void {
   elements.convertBtn.disabled = !wasmReady || !selectedFile;
+}
+
+function loadFont(): Promise<Font> {
+  const fontUrl =
+    "https://fonts.gstatic.com/s/notosansjp/v55/-F6jfjtqLzI2JPCgQBnw7HFyzSD-AsregP8VFBEj757Y1Lw_-tSdcdQHNcYjRS91AwgrmxpVq7V8Dw.0.woff2";
+
+  const ttfLoader = new TTFLoader();
+  const fontLoader = new FontLoader();
+
+  return ttfLoader.loadAsync(fontUrl).then((fontData) => fontLoader.parse(fontData));
 }
 
 async function loadWasm(): Promise<void> {
@@ -151,7 +164,7 @@ async function convertFile(): Promise<void> {
     const dxfString = dxfStringResult.data;
     elements.dxfOutput.value = dxfString;
     updateDownloadLink(dxfString);
-    renderPreview(dxfString);
+    await renderPreview(dxfString);
     setStatus(
       "DXF を生成しました。プレビューとダウンロードが利用できます。",
       "success"
@@ -200,7 +213,7 @@ function updateDownloadLink(dxfString: string): void {
   elements.downloadLink.setAttribute("aria-disabled", "false");
 }
 
-function renderPreview(dxfString: string): void {
+async function renderPreview(dxfString: string): Promise<void> {
   resetViewer("プレビューを準備しています…");
 
   try {
@@ -209,7 +222,8 @@ function renderPreview(dxfString: string): void {
     const width = elements.viewer.clientWidth || 640;
     const height = elements.viewer.clientHeight || 480;
 
-    const viewer = new Viewer(parsed, elements.viewer, width, height);
+    const font = await fontPromise;
+    const viewer = new Viewer(parsed, elements.viewer, width, height, font);
     viewer.renderer?.setClearColor?.(0x000000, 1);
     viewer.render();
     elements.viewerMessage.textContent =

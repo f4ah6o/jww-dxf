@@ -6,6 +6,7 @@ build/
 node_modules/
 wasm/node_modules/
 wasm/dist/
+wasm/src/assets/
 
 *.skill
 .claude/*
