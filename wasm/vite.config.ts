@@ -2,6 +2,7 @@ import { defineConfig } from "rolldown-vite";
 
 export default defineConfig({
   root: __dirname,
+  base: "./",
   server: {
     port: 5173,
   },
