@@ -7,12 +7,13 @@ on:
   workflow_dispatch:
 
 permissions:
-  id-token: write # Required for OIDC
-  contents: write # Required for GitHub Release
+  id-token: write   # Required for npm provenance (OIDC)
+  contents: write   # Required for GitHub Release
 
 jobs:
   release:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,22 +32,30 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
+          registry-url: https://registry.npmjs.org
 
-      - name: Install dependencies
+      - name: Install npm dependencies
         working-directory: npm
-        run: npm install
+        run: npm ci
 
       - name: Update package version from tag
         working-directory: npm
         run: |
           VERSION="${{ github.ref_name }}"
-          VERSION="${VERSION#v}"  # Remove 'v' prefix
+          VERSION="${VERSION#v}"
           npm version --no-git-tag-version --allow-same-version "$VERSION"
+
+      # 🔒 CI 安全ガード（npm scripts 側が壊れても失敗しない）
+      - name: Ensure wasm output directory exists
+        run: mkdir -p npm/wasm
 
       - name: Build package
         working-directory: npm
         run: npm run build
 
-      - name: Publish package
+      - name: Publish package to npm
         working-directory: npm
-        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance
+

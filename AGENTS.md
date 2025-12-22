@@ -1,3 +1,13 @@
+# リポジトリ運用情報
+
+## バージョニング
+`v<yyyy>.<MM>.<increment>` の形式を採用しています。
+
+## リリース（Publish）
+`tag push` トリガーで自動的に publish されます。
+
+---
+
 # DXFファイル構造リファレンス
 
 このドキュメントは、AutoCAD 2024 Developer and ObjectARX HelpからのDXFファイル構造に関する情報をまとめたものです。
