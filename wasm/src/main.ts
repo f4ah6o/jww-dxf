@@ -89,7 +89,7 @@ function updateConvertButton(): void {
 
 function loadFont(): Promise<Font> {
   const fontUrl = new URL(
-    `${import.meta.env.BASE_URL}fonts/NotoSansJP-Regular.otf`,
+    `${import.meta.env.BASE_URL}fonts/NotoSansJP-Regular.ttf`,
     window.location.href
   ).toString();
 
