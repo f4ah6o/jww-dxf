@@ -31,6 +31,10 @@ type ProgressUpdate = {
 };
 
 const BUILD_COMMIT = import.meta.env.VITE_COMMIT_HASH ?? "unknown";
+const WASM_PATH = new URL(
+  `${import.meta.env.BASE_URL}jww-parser.wasm`,
+  window.location.href
+).toString();
 
 const elements = {
   fileInput: document.getElementById("fileInput") as HTMLInputElement,
@@ -84,10 +88,10 @@ async function loadWasm(): Promise<void> {
   setStatus("WASM を読み込んでいます…");
   try {
     const result = await WebAssembly.instantiateStreaming(
-      fetch("/jww-parser.wasm"),
+      fetch(WASM_PATH),
       go.importObject
     ).catch(async () => {
-      const response = await fetch("/jww-parser.wasm");
+      const response = await fetch(WASM_PATH);
       const bytes = await response.arrayBuffer();
       return WebAssembly.instantiate(bytes, go.importObject);
     });
