@@ -88,8 +88,10 @@ function updateConvertButton(): void {
 }
 
 function loadFont(): Promise<Font> {
-  const fontUrl =
-    "https://fonts.gstatic.com/s/notosansjp/v55/-F6jfjtqLzI2JPCgQBnw7HFyzSD-AsregP8VFBEj757Y1Lw_-tSdcdQHNcYjRS91AwgrmxpVq7V8Dw.0.woff2";
+  const fontUrl = new URL(
+    `${import.meta.env.BASE_URL}fonts/NotoSansJP-Regular.otf`,
+    window.location.href
+  ).toString();
 
   const ttfLoader = new TTFLoader();
   const fontLoader = new FontLoader();
