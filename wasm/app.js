@@ -153,6 +153,9 @@
             const width = elements.viewer.clientWidth || 640;
             const height = elements.viewer.clientHeight || 480;
             const viewer = new window.ThreeDxf.Viewer(parsed, elements.viewer, width, height);
+            if (viewer?.renderer?.setClearColor) {
+                viewer.renderer.setClearColor(0x000000, 1);
+            }
             viewer.render();
             elements.viewerMessage.textContent = "右クリックでパン、マウスホイールでズームできます。";
         } catch (error) {

@@ -213,9 +213,7 @@ button:not(:disabled):active {
     border: 1px solid var(--border);
     border-radius: 12px;
     min-height: 420px;
-    background: radial-gradient(circle at 20% 30%, rgba(47, 128, 237, 0.06), transparent 32%),
-        radial-gradient(circle at 80% 10%, rgba(255, 255, 255, 0.05), transparent 26%),
-        var(--card-bg);
+    background: #000;
     overflow: hidden;
 }
 
@@ -230,7 +228,7 @@ button:not(:disabled):active {
     inset: 0;
     display: grid;
     place-items: center;
-    color: var(--muted);
+    color: rgba(255, 255, 255, 0.7);
     text-align: center;
     padding: 20px;
     pointer-events: none;
