@@ -13,7 +13,7 @@ import (
 )
 
 // Version of the WASM module
-const Version = "1.1.0"
+const Version = "1.0.0"
 
 // debugMode controls verbose logging
 var debugMode bool

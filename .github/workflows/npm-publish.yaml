@@ -44,6 +44,15 @@ jobs:
           VERSION="${VERSION#v}"
           npm version --no-git-tag-version --allow-same-version "$VERSION"
 
+      - name: Update wasm Version constant from tag
+        run: |
+          # Use the release tag (without leading 'v') as the version string
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          echo "Updating wasm/main.go Version to: $VERSION"
+          # Replace the const Version = "..." line in wasm/main.go
+          sed -E -i "s/const Version = \"[^"]+\"/const Version = \"$VERSION\"/" wasm/main.go
+
       # 🔒 CI 安全ガード（npm scripts 側が壊れても失敗しない）
       - name: Ensure wasm output directory exists
         run: mkdir -p npm/wasm
