@@ -12,8 +12,11 @@ import (
 	"github.com/f4ah6o/jww-parser/jww"
 )
 
-// Version of the WASM module
-const Version = "1.0.0"
+// Version of the WASM module (overridden at build time via -ldflags)
+var Version = "dev"
+
+// CommitHash of the WASM module (overridden at build time via -ldflags)
+var CommitHash = "unknown"
 
 // debugMode controls verbose logging
 var debugMode bool
@@ -25,6 +28,7 @@ func main() {
 	js.Global().Set("jwwToDxfString", js.FuncOf(jwwToDxfString))
 	js.Global().Set("jwwGetVersion", js.FuncOf(jwwGetVersion))
 	js.Global().Set("jwwSetDebug", js.FuncOf(jwwSetDebug))
+	js.Global().Set("jwwCommitHash", js.FuncOf(jwwCommitHash))
 
 	// Keep the program running
 	<-make(chan struct{})
@@ -34,6 +38,12 @@ func main() {
 // JS: jwwGetVersion() -> string
 func jwwGetVersion(this js.Value, args []js.Value) interface{} {
 	return Version
+}
+
+// jwwCommitHash returns the WASM module commit hash.
+// JS: jwwCommitHash() -> string
+func jwwCommitHash(this js.Value, args []js.Value) interface{} {
+	return CommitHash
 }
 
 // jwwSetDebug enables or disables debug mode.

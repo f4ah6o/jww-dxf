@@ -1,6 +1,11 @@
 .PHONY: build build-wasm test stat clean convert-examples clean-bin clean-dist clean-converted copy-wasm-assets build-npm
 
-COMMIT_HASH := $(shell git rev-parse HEAD)
+COMMIT_HASH := $(shell git rev-parse --short HEAD)
+
+# VERSION will be taken from the latest tag (without leading 'v') when available,
+# otherwise falls back to 'dev'. You can also override by invoking `make VERSION=...`.
+VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')
+VERSION := $(if $(VERSION),$(VERSION),dev)
 
 # Build native binary
 build: clean-bin
@@ -13,7 +18,8 @@ build-stats: clean-bin
 build-wasm: clean-dist
 	rm -rf dist/
 	mkdir -p dist
-	GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o dist/jww-parser.wasm ./wasm/
+	# Embed Version and CommitHash into the WASM binary via -ldflags
+	GOOS=js GOARCH=wasm go build -ldflags="-s -w -X main.Version=$(VERSION) -X main.CommitHash=$(COMMIT_HASH)" -o dist/jww-parser.wasm ./wasm/
 
 # Copy wasm_exec.js from Go installation
 copy-wasm-exec:
