@@ -115,14 +115,20 @@ async function loadFont(): Promise<Font> {
 }
 
 function extractFontUrl(css: string): string {
-  const urlPattern = /url\(("|')?(https:\/\/fonts\.gstatic\.com\/[^\)]+\.woff2)(\1)?\)/i;
-  const match = css.match(urlPattern);
+  const ttfPattern = /url\(("|')?(https:\/\/fonts\.gstatic\.com\/[^\)]+\.ttf)(\1)?\)/i;
+  const woffPattern = /url\(("|')?(https:\/\/fonts\.gstatic\.com\/[^\)]+\.woff2)(\1)?\)/i;
 
-  if (!match?.[2]) {
-    throw new Error("Failed to extract Noto Sans JP font URL from CSS response");
+  const ttfMatch = css.match(ttfPattern);
+  if (ttfMatch?.[2]) {
+    return ttfMatch[2];
   }
 
-  return match[2];
+  const woffMatch = css.match(woffPattern);
+  if (woffMatch?.[2]) {
+    return woffMatch[2];
+  }
+
+  throw new Error("Failed to extract Noto Sans JP font URL from CSS response");
 }
 
 async function loadWasm(): Promise<void> {
