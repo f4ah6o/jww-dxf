@@ -14,32 +14,33 @@ build: clean-bin
 build-stats: clean-bin
 	go build -o bin/jww-stats ./cmd/jww-stats
 
+# Install frontend dependencies for the WASM demo
+install-wasm-deps:
+	cd wasm && npm ci
+
 # Build WebAssembly
 build-wasm: clean-dist
-	rm -rf dist/
-	mkdir -p dist
-	# Embed Version and CommitHash into the WASM binary via -ldflags
-	GOOS=js GOARCH=wasm go build -ldflags="-s -w -X main.Version=$(VERSION) -X main.CommitHash=$(COMMIT_HASH)" -o dist/jww-parser.wasm ./wasm/
+	mkdir -p wasm/public
+# Embed Version and CommitHash into the WASM binary via -ldflags
+	GOOS=js GOARCH=wasm go build -ldflags="-s -w -X main.Version=$(VERSION) -X main.CommitHash=$(COMMIT_HASH)" -o wasm/public/jww-parser.wasm ./wasm/
 
 # Copy wasm_exec.js from Go installation
 copy-wasm-exec:
-	mkdir -p dist
+	mkdir -p wasm/public
 	if [ -f "$$(go env GOROOT)/misc/wasm/wasm_exec.js" ]; then \
-		cp "$$(go env GOROOT)/misc/wasm/wasm_exec.js" dist/; \
+		cp "$$(go env GOROOT)/misc/wasm/wasm_exec.js" wasm/public/; \
 	else \
-		cp "$$(go env GOROOT)/lib/wasm/wasm_exec.js" dist/; \
+		cp "$$(go env GOROOT)/lib/wasm/wasm_exec.js" wasm/public/; \
 	fi
 
-# Copy static assets for the WASM demo
-copy-wasm-assets:
-	mkdir -p dist
-	cp wasm/example.html dist/index.html
-	cp wasm/styles.css dist/
-	sed 's/__COMMIT_HASH__/$(COMMIT_HASH)/g' wasm/app.js > dist/app.js
-	cp -r wasm/vendor dist/
+# Build static assets for the WASM demo (Vite)
+copy-wasm-assets: install-wasm-deps build-wasm copy-wasm-exec
+	cd wasm && VITE_COMMIT_HASH=$(COMMIT_HASH) npm run build
+	rm -rf dist
+	cp -r wasm/dist dist
 
 # Build WASM and copy support files
-dist: build-wasm copy-wasm-exec copy-wasm-assets
+dist: copy-wasm-assets
 
 # Run tests
 test:
@@ -72,7 +73,7 @@ clean-converted:
 	rm -rf examples/converted
 
 # Build npm package
-build-npm: build-wasm copy-wasm-exec
+build-npm: dist
 	mkdir -p npm/wasm
 	cp dist/jww-parser.wasm npm/wasm/
 	cp dist/wasm_exec.js npm/wasm/

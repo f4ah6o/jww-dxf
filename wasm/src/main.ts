@@ -30,7 +30,7 @@ type ProgressUpdate = {
   blockCount: number;
 };
 
-const BUILD_COMMIT = "__COMMIT_HASH__";
+const BUILD_COMMIT = import.meta.env.VITE_COMMIT_HASH ?? "unknown";
 
 const elements = {
   fileInput: document.getElementById("fileInput") as HTMLInputElement,
@@ -226,11 +226,7 @@ function resetViewer(message: string): void {
 function setCommitHash(): void {
   if (!elements.commitHash) return;
 
-  const value =
-    typeof BUILD_COMMIT === "string" && !BUILD_COMMIT.includes("__COMMIT_HASH__")
-      ? BUILD_COMMIT
-      : "unknown";
-  elements.commitHash.textContent = value;
+  elements.commitHash.textContent = BUILD_COMMIT;
 }
 
 function updateVersion(): void {
