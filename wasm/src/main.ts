@@ -1,7 +1,5 @@
 import DxfParser from "@f12o/dxf-parser";
-import { Viewer } from "@f12o/three-dxf";
-import { FontLoader, type Font } from "three/examples/jsm/loaders/FontLoader.js";
-import { TTFLoader } from "three/examples/jsm/loaders/TTFLoader.js";
+import { Viewer } from "./three-dxf-viewer";
 import "../styles.css";
 
 declare const Go: new () => GoRuntime;
@@ -38,7 +36,8 @@ const WASM_PATH = new URL(
   window.location.href
 ).toString();
 
-const NOTO_SANS_JP_CSS_URL = "https://fonts.googleapis.com/css2?family=Noto+Sans+JP";
+const NOTO_SANS_JP_WOFF2_URL =
+  "https://fonts.gstatic.com/s/notosansjp/v55/-F6jfjtqLzI2JPCgQBnw7HFyzSD-AsregP8VFBEj756wwr4v0qHnANADNsISRDl2PRkiiWsg.0.woff2";
 
 const elements = {
   fileInput: document.getElementById("fileInput") as HTMLInputElement,
@@ -57,7 +56,6 @@ const elements = {
 let selectedFile: File | null = null;
 let wasmReady = false;
 let downloadUrl: string | null = null;
-const fontPromise = loadFont();
 
 const go = new Go();
 const wasmReadyPromise = loadWasm();
@@ -87,48 +85,6 @@ function setStatus(message: string, type: StatusType = "info"): void {
 
 function updateConvertButton(): void {
   elements.convertBtn.disabled = !wasmReady || !selectedFile;
-}
-
-async function loadFont(): Promise<Font> {
-  const ttfLoader = new TTFLoader();
-  const fontLoader = new FontLoader();
-
-  const cssResponse = await fetch(NOTO_SANS_JP_CSS_URL);
-  if (!cssResponse.ok) {
-    throw new Error(
-      `Failed to load font CSS: ${cssResponse.status} ${cssResponse.statusText}`
-    );
-  }
-
-  const css = await cssResponse.text();
-  const fontUrl = extractFontUrl(css);
-  const response = await fetch(fontUrl);
-  if (!response.ok) {
-    throw new Error(
-      `Failed to load font: ${response.status} ${response.statusText}`
-    );
-  }
-
-  const fontBuffer = await response.arrayBuffer();
-  const ttfData = ttfLoader.parse(fontBuffer);
-  return fontLoader.parse(ttfData);
-}
-
-function extractFontUrl(css: string): string {
-  const ttfPattern = /url\(("|')?(https:\/\/fonts\.gstatic\.com\/[^\)]+\.ttf)(\1)?\)/i;
-  const woffPattern = /url\(("|')?(https:\/\/fonts\.gstatic\.com\/[^\)]+\.woff2)(\1)?\)/i;
-
-  const ttfMatch = css.match(ttfPattern);
-  if (ttfMatch?.[2]) {
-    return ttfMatch[2];
-  }
-
-  const woffMatch = css.match(woffPattern);
-  if (woffMatch?.[2]) {
-    return woffMatch[2];
-  }
-
-  throw new Error("Failed to extract Noto Sans JP font URL from CSS response");
 }
 
 async function loadWasm(): Promise<void> {
@@ -256,8 +212,13 @@ async function renderPreview(dxfString: string): Promise<void> {
     const width = elements.viewer.clientWidth || 640;
     const height = elements.viewer.clientHeight || 480;
 
-    const font = await fontPromise;
-    const viewer = new Viewer(parsed, elements.viewer, width, height, font);
+    const viewer = new Viewer(
+      parsed,
+      elements.viewer,
+      width,
+      height,
+      NOTO_SANS_JP_WOFF2_URL
+    );
     viewer.renderer?.setClearColor?.(0x000000, 1);
     viewer.render();
     elements.viewerMessage.textContent =
